@@ -39,6 +39,15 @@ function pickHandInfo(vision: VisionRef): { hand: HandCoord | null; side: 'L' | 
   }
   if (vision.right?.visible) return { hand: vision.right, side: 'R' }
   if (vision.left?.visible) return { hand: vision.left, side: 'L' }
+  
+  if (vision.right?.detected && vision.left?.detected) {
+    return vision.right.confidence >= vision.left.confidence
+      ? { hand: vision.right, side: 'R' }
+      : { hand: vision.left, side: 'L' }
+  }
+  if (vision.right?.detected) return { hand: vision.right, side: 'R' }
+  if (vision.left?.detected) return { hand: vision.left, side: 'L' }
+  
   return { hand: null, side: null }
 }
 
