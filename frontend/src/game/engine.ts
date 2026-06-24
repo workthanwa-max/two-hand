@@ -285,26 +285,29 @@ function playDeflectSound(combo: number) {
   const ctx = initAudio()
   if (!ctx) return
   try {
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
-
-    const baseFreq = 440
-    const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]
-    const stepIndex = Math.min(Math.max(0, combo - 1), steps.length - 1)
-    const freq = baseFreq * Math.pow(2, steps[stepIndex] / 12)
-
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(freq, ctx.currentTime)
-
-    gainNode.gain.setValueAtTime(0, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
-
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.start()
-    oscillator.stop(ctx.currentTime + 0.15)
+    const t = ctx.currentTime
+    const duration = 0.15
+    
+    // Punchy hit sound
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    
+    // Base frequency depends on combo to give a rising effect
+    const baseFreq = 600 + Math.min(combo * 50, 600)
+    
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(baseFreq, t)
+    osc.frequency.exponentialRampToValueAtTime(100, t + duration)
+    
+    gain.gain.setValueAtTime(0, t)
+    gain.gain.linearRampToValueAtTime(0.4, t + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration)
+    
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    
+    osc.start(t)
+    osc.stop(t + duration)
   } catch (e) {}
 }
 
@@ -312,22 +315,33 @@ function playDamageSound() {
   const ctx = initAudio()
   if (!ctx) return
   try {
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
-
-    oscillator.type = 'sawtooth'
-    oscillator.frequency.setValueAtTime(150, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.2)
-
-    gainNode.gain.setValueAtTime(0, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.02)
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2)
-
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.start()
-    oscillator.stop(ctx.currentTime + 0.2)
+    const t = ctx.currentTime
+    const duration = 0.4
+    
+    // Deep thud / Explosion
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(100, t)
+    osc.frequency.exponentialRampToValueAtTime(10, t + duration)
+    
+    gain.gain.setValueAtTime(0, t)
+    gain.gain.linearRampToValueAtTime(0.5, t + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration)
+    
+    // Add distortion for a rougher sound
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.setValueAtTime(800, t)
+    filter.frequency.linearRampToValueAtTime(100, t + duration)
+    
+    osc.connect(filter)
+    filter.connect(gain)
+    gain.connect(ctx.destination)
+    
+    osc.start(t)
+    osc.stop(t + duration)
   } catch (e) {}
 }
 
@@ -335,21 +349,74 @@ function playHealSound() {
   const ctx = initAudio()
   if (!ctx) return
   try {
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
+    const t = ctx.currentTime
+    
+    // Layer 1: Rapid Arpeggio / Magic Chime
+    // Using an extended magic scale sequence
+    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98] // C5, E5, G5, C6, E6, G6
+    const stepDuration = 0.035
+    
+    notes.forEach((freq, index) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      
+      const noteTime = t + index * stepDuration
+      
+      // Use square for a bright, classic arcade sound
+      osc.type = 'square'
+      osc.frequency.setValueAtTime(freq, noteTime)
+      
+      // Plucky envelope
+      gain.gain.setValueAtTime(0, noteTime)
+      gain.gain.linearRampToValueAtTime(0.12, noteTime + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + stepDuration + 0.15)
+      
+      // Add a lowpass filter for a rounder, modern plucky sound
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(freq * 2, noteTime)
+      filter.frequency.exponentialRampToValueAtTime(freq * 0.5, noteTime + 0.1)
+      
+      osc.connect(filter)
+      filter.connect(gain)
+      gain.connect(ctx.destination)
+      
+      osc.start(noteTime)
+      osc.stop(noteTime + stepDuration + 0.15)
+    })
+    
+    // Layer 2: Power-up Glissando Sweep
+    const sweepOsc = ctx.createOscillator()
+    const sweepGain = ctx.createGain()
+    sweepOsc.type = 'sine'
+    // Quick rise from 300 to 1200
+    sweepOsc.frequency.setValueAtTime(300, t)
+    sweepOsc.frequency.exponentialRampToValueAtTime(1200, t + 0.2)
+    
+    sweepGain.gain.setValueAtTime(0, t)
+    sweepGain.gain.linearRampToValueAtTime(0.2, t + 0.05)
+    sweepGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3)
+    
+    sweepOsc.connect(sweepGain)
+    sweepGain.connect(ctx.destination)
+    sweepOsc.start(t)
+    sweepOsc.stop(t + 0.3)
 
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.2)
-
-    gainNode.gain.setValueAtTime(0, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02)
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2)
-
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.start()
-    oscillator.stop(ctx.currentTime + 0.2)
+    // Layer 3: Satisfying High Sparkle
+    const sparkleOsc = ctx.createOscillator()
+    const sparkleGain = ctx.createGain()
+    sparkleOsc.type = 'triangle'
+    // Very high pitch with slight vibrato effect via ramp
+    sparkleOsc.frequency.setValueAtTime(2000, t + 0.1)
+    sparkleOsc.frequency.linearRampToValueAtTime(3500, t + 0.35)
+    
+    sparkleGain.gain.setValueAtTime(0, t + 0.1)
+    sparkleGain.gain.linearRampToValueAtTime(0.1, t + 0.15)
+    sparkleGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5)
+    
+    sparkleOsc.connect(sparkleGain)
+    sparkleGain.connect(ctx.destination)
+    sparkleOsc.start(t + 0.1)
+    sparkleOsc.stop(t + 0.5)
   } catch (e) {}
 }

@@ -6,6 +6,7 @@ import HUD from './components/HUD'
 import StartScreen from './components/StartScreen'
 import { getLevelConfig, type ControlMode, type GameSnapshot, type PlayLevel } from './game/state'
 import useHandTracking from './hooks/useHandTracking'
+import useBGM from './hooks/useBGM'
 import { startMediaPipeWorker, stopMockVision } from './vision'
 import CameraPreview from './components/CameraPreview'
 import type { HandCoord, VisionRef } from './vision'
@@ -70,6 +71,19 @@ function App() {
 
   const vision = useHandTracking(cameraEnabled, cameraSession)
   const handFocused = hasFocusedHand(vision)
+
+  // Initialize BGM with a placeholder/default path.
+  // The user will replace the file at public/bgm.mp3
+  const { playBGM, pauseBGM } = useBGM({ src: '/bgm.mp3', volume: 0.4 })
+
+  useEffect(() => {
+    // Play BGM in all phases EXCEPT when playing the actual game
+    if (phase === 'playing') {
+      pauseBGM()
+    } else {
+      playBGM()
+    }
+  }, [phase, playBGM, pauseBGM])
 
   const openSetup = useCallback(() => {
     setPhase('level-select')
