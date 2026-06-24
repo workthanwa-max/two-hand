@@ -113,6 +113,7 @@ export type GameState = {
   nutrients: number
   shake: number
   flash: number
+  ecoMode: boolean
   input: InputState
   core: CoreState
   shield: ShieldState
@@ -160,7 +161,7 @@ export function getLevelConfig(level: PlayLevel): LevelConfig {
   return LEVELS.find((config) => config.level === level) ?? LEVELS[0]
 }
 
-export function createGameState(level: PlayLevel = 1): GameState {
+export function createGameState(level: PlayLevel = 1, controlMode: ControlMode = 'mouse'): GameState {
   return {
     phase: 'ready',
     level,
@@ -177,6 +178,7 @@ export function createGameState(level: PlayLevel = 1): GameState {
     nutrients: 0,
     shake: 0,
     flash: 0,
+    ecoMode: false,
     input: {
       x: 480,
       y: 320,
@@ -196,7 +198,7 @@ export function createGameState(level: PlayLevel = 1): GameState {
       previousAngle: -Math.PI / 2,
       angularVelocity: 0,
       radius: 108,
-      arc: Math.PI * 0.34,
+      arc: controlMode === 'body' ? (Math.PI * 2) / 3 : Math.PI / 2,
       thickness: 18,
     },
     entities: [],
@@ -205,14 +207,14 @@ export function createGameState(level: PlayLevel = 1): GameState {
   }
 }
 
-export function resetGameState(state: GameState, level: PlayLevel = state.level): void {
+export function resetGameState(state: GameState, level: PlayLevel = state.level, controlMode: ControlMode = 'mouse'): void {
   const width = state.width
   const height = state.height
   const dpr = state.dpr
   const entities = state.entities
   const particles = state.particles
   const texts = state.texts
-  Object.assign(state, createGameState(level))
+  Object.assign(state, createGameState(level, controlMode))
   state.width = width
   state.height = height
   state.dpr = dpr

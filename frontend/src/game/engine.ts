@@ -189,7 +189,7 @@ function updateGame(state: GameState, dt: number): void {
 
 function resizeCanvas(canvas: HTMLCanvasElement, state: GameState): void {
   const rect = canvas.getBoundingClientRect()
-  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const width = Math.max(320, rect.width)
   const height = Math.max(360, rect.height)
   canvas.width = Math.floor(width * dpr)
@@ -198,7 +198,7 @@ function resizeCanvas(canvas: HTMLCanvasElement, state: GameState): void {
 }
 
 export function createGameEngine({ canvas, level, controlMode, onSnapshot, onGameOver }: EngineOptions): GameEngine {
-  const state = createGameState(level)
+  const state = createGameState(level, controlMode)
   const ctx = canvas.getContext('2d')
   let raf = 0
   let lastTime = performance.now()
@@ -213,6 +213,7 @@ export function createGameEngine({ canvas, level, controlMode, onSnapshot, onGam
   const unbindInput = bindPointerInput(canvas, state, controlMode)
 
   function frame(now: number): void {
+    const frameWorkStart = performance.now()
     const dt = Math.min(0.033, (now - lastTime) / 1000)
     lastTime = now
     updateGame(state, dt)
@@ -229,12 +230,17 @@ export function createGameEngine({ canvas, level, controlMode, onSnapshot, onGam
       }
     }
 
+    const frameWorkMs = performance.now() - frameWorkStart
+    if (frameWorkMs > 33) {
+      state.ecoMode = true
+    }
+
     raf = requestAnimationFrame(frame)
   }
 
   function start(): void {
     resizeCanvas(canvas, state)
-    resetGameState(state, level)
+    resetGameState(state, level, controlMode)
     lastTime = performance.now()
     gameOverSent = false
     cancelAnimationFrame(raf)

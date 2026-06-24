@@ -16,18 +16,20 @@ function drawBackground(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, state.width, state.height)
 
-  ctx.save()
-  ctx.globalAlpha = 0.45
-  ctx.strokeStyle = '#334155'
-  ctx.lineWidth = 1
-  const gap = 48
-  for (let x = (state.elapsed * 8) % gap; x < state.width; x += gap) {
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x - state.height * 0.28, state.height)
-    ctx.stroke()
+  if (!state.ecoMode) {
+    ctx.save()
+    ctx.globalAlpha = 0.45
+    ctx.strokeStyle = '#334155'
+    ctx.lineWidth = 1
+    const gap = 48
+    for (let x = (state.elapsed * 8) % gap; x < state.width; x += gap) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x - state.height * 0.28, state.height)
+      ctx.stroke()
+    }
+    ctx.restore()
   }
-  ctx.restore()
 }
 
 function drawCore(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -36,8 +38,10 @@ function drawCore(ctx: CanvasRenderingContext2D, state: GameState): void {
   const healthRatio = Math.max(0, core.health / core.maxHealth)
 
   ctx.save()
-  ctx.shadowBlur = 34
-  ctx.shadowColor = `rgba(56, 189, 248, ${0.4 + healthRatio * 0.5})`
+  if (!state.ecoMode) {
+    ctx.shadowBlur = 34
+    ctx.shadowColor = `rgba(56, 189, 248, ${0.4 + healthRatio * 0.5})`
+  }
   ctx.fillStyle = '#1e293b'
   ctx.beginPath()
   ctx.arc(core.x, core.y, core.radius * pulse, 0, Math.PI * 2)
@@ -93,28 +97,93 @@ function drawCore(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.restore()
 }
 
-function drawToxinIcon(ctx: CanvasRenderingContext2D, icon: number, radius: number): void {
-  const icons = ['💊', '💉', '🚬']
-  const emoji = icons[icon % icons.length]
-  
-  ctx.save()
-  ctx.font = `${Math.round(radius * 1.5)}px sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(emoji, 0, 0)
-  ctx.restore()
+const entitySpriteCache = new Map<string, HTMLCanvasElement>()
+
+function getEntitySprite(
+  kind: 'toxin' | 'nutrient',
+  icon: number,
+  radius: number,
+  ecoMode: boolean,
+): HTMLCanvasElement {
+  const roundedRadius = Math.round(radius)
+  const cacheKey = `${kind}-${icon}-${roundedRadius}-${ecoMode ? 'eco' : 'full'}`
+  const cached = entitySpriteCache.get(cacheKey)
+
+  if (cached) {
+    return cached
+  }
+
+  const padding = ecoMode ? 2 : 24
+  const size = (roundedRadius + padding) * 2
+  const center = size / 2
+  const sprite = document.createElement('canvas')
+  const context = sprite.getContext('2d')
+
+  sprite.width = size
+  sprite.height = size
+
+  if (!context) {
+    entitySpriteCache.set(cacheKey, sprite)
+    return sprite
+  }
+
+  const toxin = kind === 'toxin'
+
+  if (!ecoMode) {
+    context.shadowBlur = toxin ? 22 : 18
+    context.shadowColor = toxin ? '#fb7185' : '#86efac'
+  }
+
+  if (!toxin) {
+    context.fillStyle = 'rgba(20, 83, 45, 0.9)'
+    context.beginPath()
+    context.arc(center, center, roundedRadius * 1.12, 0, Math.PI * 2)
+    context.fill()
+  } else {
+    context.fillStyle = 'rgba(127, 29, 29, 0.9)'
+    context.beginPath()
+    context.arc(center, center, roundedRadius * 1.12, 0, Math.PI * 2)
+    context.fill()
+  }
+
+  context.shadowBlur = 0
+
+  if (toxin) {
+    const icons = ['💊', '💉', '🚬']
+    const emoji = icons[icon % icons.length]
+    context.font = `${Math.round(roundedRadius * 1.5)}px sans-serif`
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.fillText(emoji, center, center)
+  } else {
+    const icons = ['🍎', '🥗', '📚', '❤️']
+    const emoji = icons[icon % icons.length]
+    context.font = `${Math.round(roundedRadius * 1.5)}px sans-serif`
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.fillText(emoji, center, center)
+  }
+
+  entitySpriteCache.set(cacheKey, sprite)
+  return sprite
 }
 
-function drawHealthIcon(ctx: CanvasRenderingContext2D, icon: number, radius: number): void {
-  const icons = ['🍎', '🥗', '📚', '❤️']
-  const emoji = icons[icon % icons.length]
-  
-  ctx.save()
-  ctx.font = `${Math.round(radius * 1.5)}px sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(emoji, 0, 0)
-  ctx.restore()
+function drawEntities(ctx: CanvasRenderingContext2D, state: GameState): void {
+  state.entities.forEach((entity) => {
+    if (!entity.active) return
+    ctx.save()
+    const toxin = entity.kind === 'toxin'
+    ctx.globalAlpha = entity.reacted ? 0.42 : 1
+    
+    ctx.translate(entity.x, entity.y)
+    ctx.rotate(entity.age * (toxin ? 2.3 : -1.6))
+    
+    const sprite = getEntitySprite(entity.kind, entity.icon, entity.radius, state.ecoMode)
+    const halfSize = sprite.width / 2
+    ctx.drawImage(sprite, -halfSize, -halfSize)
+    
+    ctx.restore()
+  })
 }
 
 function drawShield(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -124,8 +193,10 @@ function drawShield(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   ctx.save()
   ctx.lineCap = 'round'
-  ctx.shadowBlur = 24 + Math.min(26, Math.abs(shield.angularVelocity) * 0.012)
-  ctx.shadowColor = '#8b5cf6'
+  if (!state.ecoMode) {
+    ctx.shadowBlur = 24 + Math.min(26, Math.abs(shield.angularVelocity) * 0.012)
+    ctx.shadowColor = '#8b5cf6'
+  }
   ctx.strokeStyle = '#a78bfa'
   ctx.lineWidth = shield.thickness
   ctx.beginPath()
@@ -168,36 +239,6 @@ function drawInputCue(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.arc(input.x, input.y, 12 + Math.sin(state.elapsed * 7) * 2, 0, Math.PI * 2)
   ctx.stroke()
   ctx.restore()
-}
-
-function drawEntities(ctx: CanvasRenderingContext2D, state: GameState): void {
-  state.entities.forEach((entity) => {
-    if (!entity.active) return
-    ctx.save()
-    const toxin = entity.kind === 'toxin'
-    ctx.globalAlpha = entity.reacted ? 0.42 : 1
-    ctx.shadowBlur = toxin ? 22 : 18
-    ctx.shadowColor = toxin ? '#fb7185' : '#86efac'
-    ctx.translate(entity.x, entity.y)
-    ctx.rotate(entity.age * (toxin ? 2.3 : -1.6))
-    if (!toxin && !entity.reacted) {
-      ctx.fillStyle = 'rgba(20, 83, 45, 0.9)'
-      ctx.beginPath()
-      ctx.arc(0, 0, entity.radius * 1.12, 0, Math.PI * 2)
-      ctx.fill()
-    } else if (toxin && !entity.reacted) {
-      ctx.fillStyle = 'rgba(127, 29, 29, 0.9)'
-      ctx.beginPath()
-      ctx.arc(0, 0, entity.radius * 1.12, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    if (toxin) {
-      drawToxinIcon(ctx, entity.icon, entity.radius)
-    } else {
-      drawHealthIcon(ctx, entity.icon, entity.radius)
-    }
-    ctx.restore()
-  })
 }
 
 function drawParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -313,13 +354,17 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): voi
   }
 
   drawBackground(ctx, state)
-  drawParticles(ctx, state)
+  if (!state.ecoMode) {
+    drawParticles(ctx, state)
+  }
   drawCore(ctx, state)
   drawShield(ctx, state)
   drawInputCue(ctx, state)
   drawHands(ctx, state)
   drawEntities(ctx, state)
-  drawFloatingTexts(ctx, state)
+  if (!state.ecoMode) {
+    drawFloatingTexts(ctx, state)
+  }
 
   if (state.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.18, state.flash * 0.16)})`

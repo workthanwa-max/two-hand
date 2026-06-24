@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { getCameraStream, getHandMessage, bindVideoElement, type HandCoord, type VisionRef } from '../vision'
+import { getCameraStream, getHandMessage, bindVideoElement, getVisionRef, type HandCoord, type VisionRef } from '../vision'
 
 type CameraPreviewProps = {
   vision: VisionRef
@@ -81,43 +81,94 @@ function CameraPreview({ vision, compact = false, holdProgress = 0 }: CameraPrev
     }
   }, [vision.mode, vision.active, vision.stats.fps])
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    if (compact) return
+
+    let rafId: number
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    function tick() {
+      const rect = canvas!.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) {
+        rafId = requestAnimationFrame(tick)
+        return
+      }
+      
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      canvas!.width = rect.width * dpr
+      canvas!.height = rect.height * dpr
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx!.clearRect(0, 0, rect.width, rect.height)
+
+      let drawW = rect.width
+      let drawH = rect.height
+      let offsetX = 0
+      let offsetY = 0
+      const video = videoRef.current
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        const scaleX = rect.width / video.videoWidth
+        const scaleY = rect.height / video.videoHeight
+        const scale = Math.max(scaleX, scaleY)
+        drawW = video.videoWidth * scale
+        drawH = video.videoHeight * scale
+        offsetX = (rect.width - drawW) / 2
+        offsetY = (rect.height - drawH) / 2
+      }
+
+      const currentVision = getVisionRef()
+      const currentHandInfo = pickHandInfo(currentVision)
+      const currentHand = currentHandInfo.hand
+      const currentSide = currentHandInfo.side
+
+      if (currentHand?.landmarks?.length) {
+        ctx!.beginPath()
+        ctx!.strokeStyle = currentSide === 'L' ? "rgba(76, 201, 240, 0.86)" : "rgba(61, 220, 151, 0.86)"
+        ctx!.lineWidth = 8
+        ctx!.lineCap = 'round'
+        
+        HAND_LINES.forEach(([start, end]) => {
+          const a = currentHand.landmarks[start]
+          const b = currentHand.landmarks[end]
+          if (a && b) {
+            ctx!.moveTo(offsetX + a.x * drawW, offsetY + a.y * drawH)
+            ctx!.lineTo(offsetX + b.x * drawW, offsetY + b.y * drawH)
+          }
+        })
+        ctx!.stroke()
+
+        currentHand.landmarks.forEach((point, index) => {
+          const isPalm = index === 9
+          ctx!.beginPath()
+          ctx!.arc(offsetX + point.x * drawW, offsetY + point.y * drawH, isPalm ? 20 : 8, 0, Math.PI * 2)
+          ctx!.fillStyle = isPalm ? '#ffff00' : 'rgba(255, 255, 255, 0.6)'
+          ctx!.fill()
+        })
+      }
+
+      rafId = requestAnimationFrame(tick)
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [compact])
+
   return (
     <div className={`camera-preview ${compact ? 'compact' : 'full-size'} ${hand?.active ? 'tracking' : ''}`}
          style={!compact ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1, borderRadius: 0, border: 'none' } : {}}>
       <video ref={videoRef} className="camera-video mirror" playsInline muted style={!compact ? { objectFit: 'cover' } : {}} />
-      <svg className={`camera-skeleton ${hand ? `focus-${hand.focus}` : ''}`} viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
-        {hand?.landmarks?.length
-          ? HAND_LINES.map(([start, end]) => {
-              const a = hand.landmarks[start]
-              const b = hand.landmarks[end]
-              if (!a || !b) return null
-              return (
-                <line
-                  key={`${side}-${start}-${end}`}
-                  x1={a.x * 100}
-                  y1={a.y * 100}
-                  x2={b.x * 100}
-                  y2={b.y * 100}
-                  stroke={side === 'L' ? "rgba(76, 201, 240, 0.86)" : "rgba(61, 220, 151, 0.86)"}
-                  strokeWidth="0.8"
-                  strokeLinecap="round"
-                />
-              )
-            })
-          : null}
-        {hand?.landmarks?.map((point, index) => {
-          const isPalm = index === 9
-          return (
-            <circle
-              key={`${side}-node-${index}`}
-              cx={point.x * 100}
-              cy={point.y * 100}
-              r={isPalm ? 2 : 0.8}
-              fill={isPalm ? '#ffff00' : 'rgba(255, 255, 255, 0.6)'}
-            />
-          )
-        })}
-      </svg>
+      
+      {!compact && (
+        <canvas 
+          ref={canvasRef} 
+          className="camera-canvas" 
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }} 
+        />
+      )}
       
       {!compact && (
         <div className="camera-notifications" style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 2 }}>
