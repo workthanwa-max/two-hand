@@ -60,9 +60,12 @@ const handleSnapshot = (snapshot: VisionSnapshot) => {
 export function bindVideoElement(video: HTMLVideoElement | null) {
   videoEl = video
   if (visionHandler) {
-    visionHandler.setVideoElement(video)
     if (video) {
+      visionHandler.setVideoElement(video)
       visionHandler.resume()
+    } else {
+      visionHandler.pause()
+      visionHandler.setVideoElement(null)
     }
   }
 }

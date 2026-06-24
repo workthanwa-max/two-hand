@@ -302,11 +302,14 @@ function App() {
       )}
 
       {phase === 'countdown' && (
-        <div className="countdown-screen">
-          <div className="countdown-card">
-            <strong>{countdown}</strong>
+        <>
+          {controlMode === 'body' && <CameraPreview vision={vision} compact holdProgress={1} />}
+          <div className="countdown-screen">
+            <div className="countdown-card">
+              <strong>{countdown}</strong>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {rulesOpen && (
